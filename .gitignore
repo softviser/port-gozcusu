@@ -1,0 +1,17 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+
+## Derleme çıktıları
+artifacts/
+
+## İmzalama — özel anahtarı ASLA depoya göndermeyin
+certs/*.pfx
+*.pfx
+*.p12
+certs/*.txt

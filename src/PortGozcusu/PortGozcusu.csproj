@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PortGozcusu</AssemblyName>
+    <RootNamespace>PortGozcusu</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
+
+    <Version>1.0.0</Version>
+    <Product>Port Gözcüsü</Product>
+    <AssemblyTitle>Port Gözcüsü</AssemblyTitle>
+    <Description>Yerel ağdaki açık portları tarar, değişiklik olduğunda bildirim verir.</Description>
+    <Company>Softviser Yazılım</Company>
+    <Authors>Softviser Yazılım</Authors>
+    <Copyright>© 2026 Softviser Yazılım — softviser.com.tr</Copyright>
+    <PackageProjectUrl>https://softviser.com.tr</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/softviser/port-gozcusu</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NeutralLanguage>tr-TR</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app.ico" />
+  </ItemGroup>
+
+</Project>
