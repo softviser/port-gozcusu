@@ -50,6 +50,7 @@ jobs:
             $pfx = New-Object Security.Cryptography.X509Certificates.X509Certificate2("$PWD\certs\softviser-codesign.pfx", $env:PFX_PASSWORD)
             Export-Certificate -Cert $pfx -FilePath certs\softviser-codesign.cer | Out-Null
             "PG_PFX_PASSWORD=$env:PFX_PASSWORD" >> $env:GITHUB_ENV
+            "HAS_RELEASE_CERT=true" >> $env:GITHUB_ENV
           } else {
             $pw = [Guid]::NewGuid().ToString('N')
             .\scripts\new-selfsigned-cert.ps1 -Password (ConvertTo-SecureString $pw -AsPlainText -Force)
@@ -68,8 +69,9 @@ jobs:
           name: PortGozcusu-${{ steps.ver.outputs.version }}
           path: artifacts/*
 
+      # Geçici sertifikayla imzalanmış paketler sürüm sayfasına yüklenmez.
       - name: GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_RELEASE_CERT == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
