@@ -1,7 +1,10 @@
 namespace PortGozcusu;
 
-/// <summary>Listede sağ tıklanan adres/port için çalıştırılabilecek komut.</summary>
-internal sealed record PortAction(string Title, string FileName, string Arguments = "");
+/// <summary>
+/// Listede sağ tıklanan adres/port için çalıştırılabilecek komut.
+/// ShowOutput true ise komut ayrı konsol yerine uygulama içindeki çıktı penceresinde çalışır.
+/// </summary>
+internal sealed record PortAction(string Title, string FileName, string Arguments = "", bool ShowOutput = false);
 
 internal static class PortActions
 {
@@ -51,8 +54,8 @@ internal static class PortActions
     /// <summary>Her adres için geçerli ağ araçları.</summary>
     public static List<PortAction> ForHost(string host) => new()
     {
-        new("Ping gönder", "cmd.exe", $"/k ping -n 4 {host}"),
-        new("Sürekli ping (ping -t)", "cmd.exe", $"/k ping -t {host}"),
-        new("Rota izle (tracert)", "cmd.exe", $"/k tracert -d {host}"),
+        new("Ping gönder", "ping.exe", $"-n 4 {host}", ShowOutput: true),
+        new("Sürekli ping (ping -t)", "ping.exe", $"-t {host}", ShowOutput: true),
+        new("Rota izle (tracert)", "tracert.exe", $"-d {host}", ShowOutput: true),
     };
 }

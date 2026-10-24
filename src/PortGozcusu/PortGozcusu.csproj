@@ -13,7 +13,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
 
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>Port Gözcüsü</Product>
     <AssemblyTitle>Port Gözcüsü</AssemblyTitle>
     <Description>Yerel ağdaki açık portları tarar, değişiklik olduğunda bildirim verir.</Description>

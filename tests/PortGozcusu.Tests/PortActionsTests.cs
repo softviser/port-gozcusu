@@ -46,10 +46,17 @@ public class PortActionsTests
     }
 
     [Fact]
-    public void Host_actions_include_ping_and_tracert()
+    public void Host_actions_run_inside_the_app()
     {
-        var args = PortActions.ForHost(Host).Select(a => a.Arguments).ToList();
-        Assert.Contains("/k ping -n 4 192.168.1.20", args);
-        Assert.Contains("/k tracert -d 192.168.1.20", args);
+        var actions = PortActions.ForHost(Host);
+        Assert.All(actions, a => Assert.True(a.ShowOutput));
+        Assert.Contains(actions, a => a.FileName == "ping.exe" && a.Arguments == "-n 4 192.168.1.20");
+        Assert.Contains(actions, a => a.FileName == "tracert.exe" && a.Arguments == "-d 192.168.1.20");
+    }
+
+    [Fact]
+    public void Interactive_tools_still_open_their_own_window()
+    {
+        Assert.False(Assert.Single(PortActions.ForPort(Host, 22)).ShowOutput);
     }
 }

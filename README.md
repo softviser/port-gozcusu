@@ -13,8 +13,9 @@ Geliştirici: [Softviser Yazılım](https://softviser.com.tr) — MIT lisansı i
 - Hedef girilmezse bağlı olunan yerel ağı (/24) kendisi bulur.
 - Hedef olarak CIDR (`192.168.1.0/24`), aralık (`10.0.0.5-40` veya `10.0.0.5-10.0.1.20`), tek IP ya da makine adı kabul eder.
 - Port listesi ve aralıkları: `22,80,443,8000-8100`. Varsayılan olarak sık kullanılan 30 kadar port taranır. Başlangıç–bitiş kutularıyla aralık eklenebilir ya da hazır listelerden (web, uzak erişim, veritabanı, dosya paylaşımı, 1-1024) biri seçilebilir.
-- Sonuçlar adrese, porta ya da servise göre gruplanabilir; arama kutusu adres, cihaz adı, port ve servis üzerinde anında süzer.
-- Listede sağ tıklayınca porta uygun işlemler çıkar: RDP ile bağlan, SSH, Telnet, tarayıcıda aç (HTTP/HTTPS), paylaşılan klasörleri aç, VNC, PowerShell uzak oturumu. Her adres için ping, sürekli ping, tracert, portu yeniden kontrol etme ve kopyalama seçenekleri de vardır.
+- Sonuçlar adrese, porta ya da servise göre gruplanabilir; arama kutusu adres, cihaz adı, port, servis ve paylaşım adları üzerinde anında süzer. Sütun başlığına tıklayarak sıralanabilir (IP, port ve tarih sütunları değerine göre sıralanır).
+- SMB (139/445) portu açık cihazlardaki paylaşılan klasörler okunur ve listede gösterilir; sağ tık menüsünden doğrudan açılabilir.
+- Listede sağ tıklayınca porta uygun işlemler çıkar: RDP ile bağlan, SSH, Telnet, tarayıcıda aç (HTTP/HTTPS), paylaşılan klasörleri aç, VNC, PowerShell uzak oturumu. Her adres için ping, sürekli ping, tracert, portu yeniden kontrol etme ve kopyalama seçenekleri de vardır. Ping ve tracert ayrı bir komut penceresi açmadan uygulamanın kendi penceresinde çalışır.
 - Yeni açılan ve kapanan portlar için bildirim gösterir, değişiklikleri `changes.log` dosyasına yazar.
 - Cihaz adlarını (ters DNS / NetBIOS) ve bilinen servis adlarını (SSH, RDP, SMB, MySQL vb.) listeler.
 - Açık port listesi CSV olarak dışa aktarılabilir.
@@ -50,9 +51,17 @@ Listenin üstündeki **Grupla** kutusundan adres, port ya da servise göre grupl
 
 ### Sağ tık menüsü
 
-Bir satıra sağ tıkladığınızda o portun ne işe yaradığına göre işlemler listelenir. Örneğin 3389 için Uzak Masaüstü, 22 için SSH, 80/443/8080 için tarayıcı, 445 için paylaşılan klasörler açılır. Ping ve tracert komutları ayrı bir komut penceresinde çalışır.
+Bir satıra sağ tıkladığınızda o portun ne işe yaradığına göre işlemler listelenir. Örneğin 3389 için Uzak Masaüstü, 22 için SSH, 80/443/8080 için tarayıcı, 445 için paylaşılan klasörler açılır. Cihazda okunabilen paylaşımlar varsa her biri menüde ayrı ayrı yer alır.
 
 ![Sağ tık menüsü](docs/screenshot-menu.png)
+
+Ping, sürekli ping ve tracert çıktısı uygulama içindeki bir pencerede canlı olarak akar. Komut buradan durdurulabilir, yeniden çalıştırılabilir ya da çıktı kopyalanabilir.
+
+![Ping penceresi](docs/screenshot-ping.png)
+
+### Paylaşılan klasörler
+
+Tarama sırasında 139 veya 445 portu açık olan cihazlardaki paylaşımlar okunur ve **Paylaşımlar** sütununda gösterilir. `C$`, `ADMIN$`, `IPC$` gibi yönetim paylaşımları listelenmez. Cihaz Windows kullanıcınızın erişimine izin vermiyorsa sütunda "(erişim yok)" yazar.
 
 Pencereyi kapattığınızda uygulama tepsiye iner. Tamamen kapatmak için tepsi simgesine sağ tıklayıp **Çıkış**'ı seçin.
 
@@ -142,6 +151,9 @@ src/PortGozcusu/
   MainForm.cs       Ana pencere, tepsi simgesi, gruplama/arama, sağ tık menüsü
   Scanner.cs        TCP tarayıcı, hedef/port ayrıştırma, yerel ağ tespiti
   PortActions.cs    Porta göre çalıştırılacak komutlar (RDP, SSH, tarayıcı, ping...)
+  CommandOutputForm.cs  Ping/tracert çıktısını gösteren pencere
+  Shares.cs         SMB paylaşımlarını okuma (NetShareEnum)
+  ListSort.cs       Sütuna göre sıralama
   Models.cs         Ayarlar, tarama sonucu, değişiklik kaydı, servis adları
   AppInfo.cs        Sabitler, veri klasörü, otomatik başlatma
 tests/              xUnit birim testleri
@@ -153,6 +165,12 @@ build.ps1           Derleme ve paketleme
 ```
 
 ## Sürüm geçmişi
+
+### 1.2.0
+
+- Ping, sürekli ping ve tracert artık uygulama içindeki bir pencerede çalışıyor; ayrı komut satırı pencereleri açılmıyor. Çıktı durdurulabilir, yeniden çalıştırılabilir ve kopyalanabilir.
+- SMB portu açık cihazlardaki paylaşılan klasörler listede gösteriliyor ve sağ tık menüsünden açılabiliyor.
+- Açık portlar ve değişiklikler listelerinde sütun başlığına tıklayarak sıralama (artan/azalan).
 
 ### 1.1.0
 

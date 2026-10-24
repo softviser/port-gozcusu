@@ -149,7 +149,7 @@ internal sealed class MainForm : Form
         group.Controls.Add(table);
 
         // Listeler
-        _lvOpen = MakeListView(("Adres", 130), ("Cihaz adı", 220), ("Port", 70), ("Servis", 150), ("İlk görülme", 140), ("Son görülme", 140));
+        _lvOpen = MakeListView(("Adres", 120), ("Cihaz adı", 180), ("Port", 60), ("Servis", 130), ("Paylaşımlar", 200), ("İlk görülme", 125), ("Son görülme", 125));
         _lvChanges = MakeListView(("Zaman", 140), ("Durum", 90), ("Adres", 130), ("Cihaz adı", 220), ("Port", 70), ("Servis", 150));
         _lvOpen.ContextMenuStrip = MakeItemMenu(_lvOpen);
         _lvChanges.ContextMenuStrip = MakeItemMenu(_lvChanges);
@@ -389,11 +389,14 @@ internal sealed class MainForm : Form
             var found = await Scanner.ScanAsync(hosts, ports, _settings.TimeoutMs, _settings.Parallelism, progress, ct);
             SetStatus("Cihaz adları çözümleniyor...");
             var names = await Scanner.ResolveNamesAsync(found.Select(f => f.Host).Distinct(), ct);
+            SetStatus("Paylaşılan klasörler okunuyor...");
+            var shares = await Shares.ListAsync(
+                found.Where(f => f.Port is 139 or 445).Select(f => f.Host.ToString()).Distinct(), ct);
 
             var scopeHosts = hosts.Select(h => h.ToString()).ToHashSet();
             var scopePorts = ports.ToHashSet();
             bool baseline = _snapshot.LastScan == null;
-            var changes = ApplyResults(found, names, scopeHosts, scopePorts, DateTime.Now);
+            var changes = ApplyResults(found, names, shares, scopeHosts, scopePorts, DateTime.Now);
 
             if (changes.Count > 0)
             {
@@ -433,7 +436,7 @@ internal sealed class MainForm : Form
     }
 
     private List<PortChange> ApplyResults(List<(IPAddress Host, int Port)> found, Dictionary<string, string> names,
-        HashSet<string> scopeHosts, HashSet<int> scopePorts, DateTime now)
+        Dictionary<string, Shares.Result> shares, HashSet<string> scopeHosts, HashSet<int> scopePorts, DateTime now)
     {
         bool baseline = _snapshot.LastScan == null;
         var newOpen = new Dictionary<string, PortEntry>();
@@ -444,17 +447,22 @@ internal sealed class MainForm : Form
             var host = ip.ToString();
             var key = $"{host}:{port}";
             names.TryGetValue(host, out var hostName);
-            if (_snapshot.Open.TryGetValue(key, out var prev))
+            if (_snapshot.Open.TryGetValue(key, out var entry))
             {
-                prev.LastSeen = now;
-                prev.HostName = hostName ?? prev.HostName;
-                newOpen[key] = prev;
+                entry.LastSeen = now;
+                entry.HostName = hostName ?? entry.HostName;
             }
             else
             {
-                newOpen[key] = new PortEntry { Host = host, Port = port, HostName = hostName, FirstSeen = now, LastSeen = now };
+                entry = new PortEntry { Host = host, Port = port, HostName = hostName, FirstSeen = now, LastSeen = now };
                 if (!baseline) changes.Add(new PortChange(now, true, host, port, hostName));
             }
+            if (port is 139 or 445 && shares.TryGetValue(host, out var sh))
+            {
+                entry.Shares = sh.Names;
+                entry.ShareError = sh.Error;
+            }
+            newOpen[key] = entry;
         }
 
         foreach (var (key, prev) in _snapshot.Open)
@@ -493,7 +501,7 @@ internal sealed class MainForm : Form
 
     // Görünüm
 
-    private sealed record Target(string Host, int Port, string? HostName);
+    private sealed record Target(string Host, int Port, string? HostName, IReadOnlyList<string>? Shares = null);
 
     private void RenderAll()
     {
@@ -502,9 +510,9 @@ internal sealed class MainForm : Form
             .ThenBy(e => e.Port)
             .Select(e => new ListViewItem(new[]
             {
-                e.Host, e.HostName ?? "", e.Port.ToString(), Services.NameOf(e.Port),
+                e.Host, e.HostName ?? "", e.Port.ToString(), Services.NameOf(e.Port), SharesText(e),
                 e.FirstSeen.ToString("g"), e.LastSeen.ToString("g"),
-            }) { Tag = new Target(e.Host, e.Port, e.HostName) }));
+            }) { Tag = new Target(e.Host, e.Port, e.HostName, e.Shares) }));
 
         Fill(_lvChanges, _changes.Select(c => new ListViewItem(new[]
         {
@@ -557,8 +565,12 @@ internal sealed class MainForm : Form
                 }
             }
         }
+        if (lv.ListViewItemSorter != null) lv.Sort();
         lv.EndUpdate();
     }
+
+    private static string SharesText(PortEntry e) =>
+        e.Shares is { Count: > 0 } s ? string.Join(", ", s) : e.ShareError is { } err ? $"({err})" : "";
 
     private static (string Header, string Sort) GroupKey(Target t, string mode)
     {
@@ -591,6 +603,11 @@ internal sealed class MainForm : Form
             menu.Items.Add(new ToolStripSeparator());
             foreach (var a in PortActions.ForPort(t.Host, t.Port))
                 menu.Items.Add(a.Title, null, (_, _) => Launch(a));
+            foreach (var share in t.Shares ?? Array.Empty<string>())
+            {
+                var path = $@"\\{t.Host}\{share}";
+                menu.Items.Add($"{path} klasörünü aç", null, (_, _) => Launch(new PortAction("Paylaşım", "explorer.exe", path)));
+            }
             menu.Items.Add("Portu şimdi kontrol et", null, async (_, _) => await RecheckAsync(t));
             menu.Items.Add(new ToolStripSeparator());
             foreach (var a in PortActions.ForHost(t.Host))
@@ -609,6 +626,11 @@ internal sealed class MainForm : Form
 
     private void Launch(PortAction a)
     {
+        if (a.ShowOutput)
+        {
+            new CommandOutputForm(a).Show(this);
+            return;
+        }
         try
         {
             Process.Start(new ProcessStartInfo(a.FileName, a.Arguments) { UseShellExecute = true });
@@ -650,7 +672,7 @@ internal sealed class MainForm : Form
         };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-        var sb = new StringBuilder("Adres;Cihaz adı;Port;Servis;İlk görülme;Son görülme\r\n");
+        var sb = new StringBuilder("Adres;Cihaz adı;Port;Servis;Paylaşımlar;İlk görülme;Son görülme\r\n");
         foreach (ListViewItem item in _lvOpen.Items)
             sb.AppendLine(string.Join(';', item.SubItems.Cast<ListViewItem.ListViewSubItem>().Select(s => s.Text.Replace(';', ','))));
         File.WriteAllText(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
@@ -683,7 +705,18 @@ internal sealed class MainForm : Form
             HideSelection = false,
         };
         foreach (var (title, width) in columns)
-            lv.Columns.Add(title, width);
+            lv.Columns.Add(title, width).Tag = title;
+
+        var sorter = new ListSort();
+        lv.ColumnClick += (_, e) =>
+        {
+            sorter.Descending = lv.ListViewItemSorter != null && sorter.Column == e.Column && !sorter.Descending;
+            sorter.Column = e.Column;
+            lv.ListViewItemSorter = sorter;
+            lv.Sort();
+            foreach (ColumnHeader c in lv.Columns)
+                c.Text = (string)c.Tag! + (c.Index == e.Column ? (sorter.Descending ? " ▼" : " ▲") : "");
+        };
         return lv;
     }
 }

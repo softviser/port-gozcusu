@@ -24,6 +24,9 @@ public sealed class PortEntry
     public string Host { get; set; } = "";
     public int Port { get; set; }
     public string? HostName { get; set; }
+    /// <summary>139/445 portlarında okunan paylaşılan klasörler.</summary>
+    public List<string>? Shares { get; set; }
+    public string? ShareError { get; set; }
     public DateTime FirstSeen { get; set; }
     public DateTime LastSeen { get; set; }
 }

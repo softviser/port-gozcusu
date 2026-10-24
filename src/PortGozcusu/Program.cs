@@ -18,6 +18,8 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        // ping/tracert çıktısının OEM kod sayfası (857) için.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
         bool startMinimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
         using var form = new MainForm(startMinimized);
