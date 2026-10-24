@@ -6,11 +6,15 @@ Ofis ya da ev ağında "dün kapalı olan bir port bugün neden açık?" sorusun
 
 Geliştirici: [Softviser Yazılım](https://softviser.com.tr) — MIT lisansı ile açık kaynak.
 
+![Port Gözcüsü ana pencere](docs/screenshot-main.png)
+
 ## Neler yapıyor
 
 - Hedef girilmezse bağlı olunan yerel ağı (/24) kendisi bulur.
 - Hedef olarak CIDR (`192.168.1.0/24`), aralık (`10.0.0.5-40` veya `10.0.0.5-10.0.1.20`), tek IP ya da makine adı kabul eder.
-- Port listesi ve aralıkları: `22,80,443,8000-8100`. Varsayılan olarak sık kullanılan 30 kadar port taranır.
+- Port listesi ve aralıkları: `22,80,443,8000-8100`. Varsayılan olarak sık kullanılan 30 kadar port taranır. Başlangıç–bitiş kutularıyla aralık eklenebilir ya da hazır listelerden (web, uzak erişim, veritabanı, dosya paylaşımı, 1-1024) biri seçilebilir.
+- Sonuçlar adrese, porta ya da servise göre gruplanabilir; arama kutusu adres, cihaz adı, port ve servis üzerinde anında süzer.
+- Listede sağ tıklayınca porta uygun işlemler çıkar: RDP ile bağlan, SSH, Telnet, tarayıcıda aç (HTTP/HTTPS), paylaşılan klasörleri aç, VNC, PowerShell uzak oturumu. Her adres için ping, sürekli ping, tracert, portu yeniden kontrol etme ve kopyalama seçenekleri de vardır.
 - Yeni açılan ve kapanan portlar için bildirim gösterir, değişiklikleri `changes.log` dosyasına yazar.
 - Cihaz adlarını (ters DNS / NetBIOS) ve bilinen servis adlarını (SSH, RDP, SMB, MySQL vb.) listeler.
 - Açık port listesi CSV olarak dışa aktarılabilir.
@@ -37,6 +41,18 @@ Ayarlar ana pencerededir:
 - **Hedefler:** Boş bırakırsanız yerel ağ kullanılır. "Alt ağı algıla" düğmesi bulunan ağı kutuya yazar, oradan düzenleyebilirsiniz.
 - **Portlar:** Virgülle ayrılmış liste ya da aralık.
 - **Tarama aralığı / zaman aşımı:** Varsayılanlar 15 dakika ve 400 ms. Yavaş Wi-Fi ağlarda zaman aşımını artırmak gerekebilir.
+
+### Sonuçları gruplama ve arama
+
+Listenin üstündeki **Grupla** kutusundan adres, port ya da servise göre gruplama seçilebilir; gruplar başlıklarına tıklanarak daraltılabilir. **Ara** kutusuna yazılan metin her iki sekmede de (açık portlar ve değişiklikler) uygulanır. Örneğin `http` yazıp porta göre gruplamak tüm web servislerini bir arada gösterir:
+
+![Porta göre gruplama ve arama](docs/screenshot-filter.png)
+
+### Sağ tık menüsü
+
+Bir satıra sağ tıkladığınızda o portun ne işe yaradığına göre işlemler listelenir. Örneğin 3389 için Uzak Masaüstü, 22 için SSH, 80/443/8080 için tarayıcı, 445 için paylaşılan klasörler açılır. Ping ve tracert komutları ayrı bir komut penceresinde çalışır.
+
+![Sağ tık menüsü](docs/screenshot-menu.png)
 
 Pencereyi kapattığınızda uygulama tepsiye iner. Tamamen kapatmak için tepsi simgesine sağ tıklayıp **Çıkış**'ı seçin.
 
@@ -102,6 +118,12 @@ $env:PG_PFX_PASSWORD = '<pfx parolası>'
 | `-NoInstaller` | Sadece taşınabilir ZIP üretir. |
 | `-FrameworkDependent` | Daha küçük exe üretir, ancak hedef makinede .NET 8 Desktop Runtime gerekir. |
 
+Birim testleri:
+
+```powershell
+dotnet test tests\PortGozcusu.Tests
+```
+
 ### GitHub Actions
 
 `.github/workflows/build.yml` her push'ta projeyi derler. `v1.0.0` gibi bir etiket gönderildiğinde GitHub Release oluşturur ve paketleri ekler.
@@ -117,15 +139,33 @@ Bu secret'lar yoksa (örneğin bir fork'ta) her çalıştırmada geçici bir ser
 
 ```
 src/PortGozcusu/
-  MainForm.cs       Ana pencere, tepsi simgesi, zamanlayıcı ve değişiklik karşılaştırması
+  MainForm.cs       Ana pencere, tepsi simgesi, gruplama/arama, sağ tık menüsü
   Scanner.cs        TCP tarayıcı, hedef/port ayrıştırma, yerel ağ tespiti
+  PortActions.cs    Porta göre çalıştırılacak komutlar (RDP, SSH, tarayıcı, ping...)
   Models.cs         Ayarlar, tarama sonucu, değişiklik kaydı, servis adları
   AppInfo.cs        Sabitler, veri klasörü, otomatik başlatma
+tests/              xUnit birim testleri
+docs/               README görselleri
 installer/          Inno Setup betiği
 scripts/            Sertifika oluşturma, imzalama, sertifikayı güvenilir yapma
 tools/              Uygulama simgesini üreten betik
 build.ps1           Derleme ve paketleme
 ```
+
+## Sürüm geçmişi
+
+### 1.1.0
+
+- Sonuç listelerinde adrese, porta veya servise göre gruplama (seçim hatırlanır).
+- Açık portlar ve değişiklikler listesinde arama/süzme.
+- Port aralığı ekleme kutuları ve hazır port listeleri.
+- Sağ tık menüsü: RDP, SSH, Telnet, tarayıcıda aç, paylaşılan klasörler, VNC, PowerShell uzak oturumu, ping, tracert, portu yeniden kontrol et, adres kopyalama.
+- `10.0.0` gibi eksik yazılmış IP adresleri artık hata olarak bildiriliyor (önceden Windows bunu 10.0.0.0 olarak çözüyordu).
+- Birim testleri ve CI'da test adımı eklendi.
+
+### 1.0.0
+
+- İlk sürüm: yerel ağ taraması, değişiklik bildirimi, tepside çalışma, taşınabilir ve kurulabilir paketler, self-signed imza.
 
 ## Katkı
 

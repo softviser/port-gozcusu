@@ -13,7 +13,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>tr</SatelliteResourceLanguages>
 
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Product>Port Gözcüsü</Product>
     <AssemblyTitle>Port Gözcüsü</AssemblyTitle>
     <Description>Yerel ağdaki açık portları tarar, değişiklik olduğunda bildirim verir.</Description>
@@ -25,6 +25,10 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <NeutralLanguage>tr-TR</NeutralLanguage>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PortGozcusu.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\app.ico" />

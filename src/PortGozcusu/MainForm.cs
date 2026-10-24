@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 
@@ -9,8 +10,9 @@ internal sealed class MainForm : Form
 
     private readonly NotifyIcon _tray;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly TextBox _txtTargets, _txtPorts;
-    private readonly NumericUpDown _numInterval, _numTimeout;
+    private readonly TextBox _txtTargets, _txtPorts, _txtFilter;
+    private readonly NumericUpDown _numInterval, _numTimeout, _numFrom, _numTo;
+    private readonly ComboBox _cmbGroup;
     private readonly CheckBox _chkAutostart, _chkNotifyOpened, _chkNotifyClosed, _chkScanOnStartup;
     private readonly Button _btnScan, _btnStop;
     private readonly ListView _lvOpen, _lvChanges;
@@ -22,6 +24,7 @@ internal sealed class MainForm : Form
 
     private AppSettings _settings;
     private Snapshot _snapshot;
+    private readonly List<PortChange> _changes = new(); // en yenisi başta
     private CancellationTokenSource? _scanCts;
     private DateTime _nextScan = DateTime.MaxValue;
     private bool _allowShow, _exiting, _hideHintShown;
@@ -90,18 +93,35 @@ internal sealed class MainForm : Form
         table.Controls.Add(_txtPorts, 1, 1);
         table.SetColumnSpan(_txtPorts, 4);
 
+        _numFrom = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 1, Width = 75 };
+        _numTo = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 1024, Width = 75 };
+        var btnAddRange = new Button { Text = "Aralığı ekle", AutoSize = true };
+        btnAddRange.Click += (_, _) => AddPortRange();
+        var cmbPresets = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 280 };
+        cmbPresets.Items.AddRange(PortPresets.Keys.ToArray<object>());
+        cmbPresets.SelectionChangeCommitted += (_, _) => _txtPorts.Text = PortPresets[(string)cmbPresets.SelectedItem!];
+        var range = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        range.Controls.AddRange(new Control[]
+        {
+            _numFrom, MakeLabel("–"), _numTo, btnAddRange,
+            MakeLabel("   Hazır liste:"), cmbPresets,
+        });
+        table.Controls.Add(MakeLabel("Port aralığı:"), 0, 2);
+        table.Controls.Add(range, 1, 2);
+        table.SetColumnSpan(range, 4);
+
         var timing = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
         timing.Controls.AddRange(new Control[]
         {
             MakeLabel("Tarama aralığı (dk):"), _numInterval,
             MakeLabel("   Zaman aşımı (ms):"), _numTimeout,
         });
-        table.Controls.Add(timing, 1, 2);
+        table.Controls.Add(timing, 1, 3);
         table.SetColumnSpan(timing, 4);
 
         var checks = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
         checks.Controls.AddRange(new Control[] { _chkNotifyOpened, _chkNotifyClosed, _chkScanOnStartup, _chkAutostart });
-        table.Controls.Add(checks, 1, 3);
+        table.Controls.Add(checks, 1, 4);
         table.SetColumnSpan(checks, 4);
 
         var hint = new Label
@@ -110,12 +130,12 @@ internal sealed class MainForm : Form
             ForeColor = SystemColors.GrayText,
             Text = "Örnek hedef: 192.168.1.0/24, 10.0.0.5-40, sunucu.local   •   Örnek port: 22,80,443,8000-8100",
         };
-        table.Controls.Add(hint, 1, 4);
+        table.Controls.Add(hint, 1, 5);
         table.SetColumnSpan(hint, 4);
 
         var buttons = new FlowLayoutPanel { AutoSize = true, Margin = Padding.Empty };
         buttons.Controls.AddRange(new Control[] { _btnScan, _btnStop, btnSave });
-        table.Controls.Add(buttons, 1, 5);
+        table.Controls.Add(buttons, 1, 6);
         table.SetColumnSpan(buttons, 4);
 
         var group = new GroupBox
@@ -131,6 +151,26 @@ internal sealed class MainForm : Form
         // Listeler
         _lvOpen = MakeListView(("Adres", 130), ("Cihaz adı", 220), ("Port", 70), ("Servis", 150), ("İlk görülme", 140), ("Son görülme", 140));
         _lvChanges = MakeListView(("Zaman", 140), ("Durum", 90), ("Adres", 130), ("Cihaz adı", 220), ("Port", 70), ("Servis", 150));
+        _lvOpen.ContextMenuStrip = MakeItemMenu(_lvOpen);
+        _lvChanges.ContextMenuStrip = MakeItemMenu(_lvChanges);
+
+        _txtFilter = new TextBox { Width = 280, PlaceholderText = "Adres, cihaz adı, port veya servis ara" };
+        _txtFilter.TextChanged += (_, _) => RenderAll();
+        _cmbGroup = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
+        _cmbGroup.Items.AddRange(new object[] { "Gruplama yok", "Adres", "Port", "Servis" });
+        _cmbGroup.SelectionChangeCommitted += (_, _) =>
+        {
+            _settings.GroupBy = _cmbGroup.SelectedIndex > 0 ? (string)_cmbGroup.SelectedItem! : "";
+            Storage.Save(AppPaths.SettingsFile, _settings);
+            RenderAll();
+        };
+        var btnClearFilter = new Button { Text = "Temizle", AutoSize = true };
+        btnClearFilter.Click += (_, _) => _txtFilter.Clear();
+        var filterBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Padding = new Padding(4, 4, 4, 0) };
+        filterBar.Controls.AddRange(new Control[]
+        {
+            MakeLabel("Ara:"), _txtFilter, btnClearFilter, MakeLabel("   Grupla:"), _cmbGroup,
+        });
 
         _tabs = new TabControl { Dock = DockStyle.Fill };
         var tabOpen = new TabPage("Açık Portlar");
@@ -150,6 +190,7 @@ internal sealed class MainForm : Form
         status.Items.AddRange(new ToolStripItem[] { _lblStatus, _progress, _lblNext, website });
 
         Controls.Add(_tabs);
+        Controls.Add(filterBar);
         Controls.Add(group);
         Controls.Add(status);
         Controls.Add(menu);
@@ -180,9 +221,8 @@ internal sealed class MainForm : Form
         };
 
         LoadSettingsToUi();
-        RenderOpenPorts();
-        foreach (var c in Storage.LoadRecentChanges(MaxChangeRows))
-            AddChangeRow(c);
+        _changes.AddRange(Storage.LoadRecentChanges(MaxChangeRows).AsEnumerable().Reverse());
+        RenderAll();
 
         HandleCreated += OnFirstHandleCreated;
     }
@@ -260,6 +300,26 @@ internal sealed class MainForm : Form
         _chkNotifyClosed.Checked = _settings.NotifyOnClosed;
         _chkScanOnStartup.Checked = _settings.ScanOnStartup;
         _chkAutostart.Checked = Autostart.IsEnabled();
+        _cmbGroup.SelectedIndex = Math.Max(0, _cmbGroup.Items.IndexOf(_settings.GroupBy));
+    }
+
+    private static readonly Dictionary<string, string> PortPresets = new()
+    {
+        ["Yaygın portlar"] = AppSettings.DefaultPorts,
+        ["Web (80, 443, 8000-8100, 8443)"] = "80,443,8000-8100,8443",
+        ["Uzak erişim (SSH, Telnet, RDP, VNC, WinRM)"] = "22,23,3389,5900,5985,5986",
+        ["Veritabanı"] = "1433,1521,3306,5432,6379,9200,11211,27017",
+        ["Dosya paylaşımı (FTP, SMB, NFS)"] = "20,21,139,445,2049",
+        ["İyi bilinen portlar (1-1024)"] = "1-1024",
+    };
+
+    private void AddPortRange()
+    {
+        int from = (int)_numFrom.Value, to = (int)_numTo.Value;
+        if (to < from) (from, to) = (to, from);
+        var token = from == to ? from.ToString() : $"{from}-{to}";
+        var current = _txtPorts.Text.Trim().TrimEnd(',');
+        _txtPorts.Text = current.Length == 0 ? token : $"{current},{token}";
     }
 
     private bool ApplyUiToSettings()
@@ -335,13 +395,14 @@ internal sealed class MainForm : Form
             bool baseline = _snapshot.LastScan == null;
             var changes = ApplyResults(found, names, scopeHosts, scopePorts, DateTime.Now);
 
-            RenderOpenPorts();
             if (changes.Count > 0)
             {
                 Storage.AppendChanges(changes);
-                foreach (var c in changes) AddChangeRow(c);
+                _changes.InsertRange(0, changes);
+                if (_changes.Count > MaxChangeRows) _changes.RemoveRange(MaxChangeRows, _changes.Count - MaxChangeRows);
                 Notify(changes);
             }
+            RenderAll();
 
             var summary = $"Son tarama: {DateTime.Now:g} — {_snapshot.Open.Count} açık port, {changes.Count} değişiklik";
             SetStatus(summary);
@@ -432,38 +493,138 @@ internal sealed class MainForm : Form
 
     // Görünüm
 
-    private void RenderOpenPorts()
+    private sealed record Target(string Host, int Port, string? HostName);
+
+    private void RenderAll()
     {
-        _lvOpen.BeginUpdate();
-        _lvOpen.Items.Clear();
-        foreach (var e in _snapshot.Open.Values
-                     .OrderBy(e => IPAddress.TryParse(e.Host, out var ip) ? Scanner.IpSortKey(ip) : 0)
-                     .ThenBy(e => e.Port))
-        {
-            _lvOpen.Items.Add(new ListViewItem(new[]
+        Fill(_lvOpen, _snapshot.Open.Values
+            .OrderBy(e => IPAddress.TryParse(e.Host, out var ip) ? Scanner.IpSortKey(ip) : 0)
+            .ThenBy(e => e.Port)
+            .Select(e => new ListViewItem(new[]
             {
                 e.Host, e.HostName ?? "", e.Port.ToString(), Services.NameOf(e.Port),
                 e.FirstSeen.ToString("g"), e.LastSeen.ToString("g"),
-            }));
-        }
-        _lvOpen.EndUpdate();
-        _tabs.TabPages[0].Text = $"Açık Portlar ({_snapshot.Open.Count})";
-    }
+            }) { Tag = new Target(e.Host, e.Port, e.HostName) }));
 
-    private void AddChangeRow(PortChange c)
-    {
-        var item = new ListViewItem(new[]
+        Fill(_lvChanges, _changes.Select(c => new ListViewItem(new[]
         {
             c.Time.ToString("g"), c.Opened ? "▲ Açıldı" : "▼ Kapandı", c.Host, c.HostName ?? "",
             c.Port.ToString(), Services.NameOf(c.Port),
         })
         {
             ForeColor = c.Opened ? Color.FromArgb(176, 64, 0) : Color.FromArgb(0, 110, 60),
+            Tag = new Target(c.Host, c.Port, c.HostName),
+        }));
+
+        bool filtered = _txtFilter.Text.Trim().Length > 0;
+        _tabs.TabPages[0].Text = filtered
+            ? $"Açık Portlar ({_lvOpen.Items.Count}/{_snapshot.Open.Count})"
+            : $"Açık Portlar ({_snapshot.Open.Count})";
+        _tabChanges.Text = filtered
+            ? $"Değişiklikler ({_lvChanges.Items.Count}/{_changes.Count})"
+            : $"Değişiklikler ({_changes.Count})";
+    }
+
+    /// <summary>Listeyi arama metnine göre süzer ve seçili alana göre gruplar.</summary>
+    private void Fill(ListView lv, IEnumerable<ListViewItem> items)
+    {
+        var filter = _txtFilter.Text.Trim();
+        var mode = _settings.GroupBy;
+        var rows = items.Where(i => filter.Length == 0 || i.SubItems.Cast<ListViewItem.ListViewSubItem>()
+            .Any(s => s.Text.Contains(filter, StringComparison.CurrentCultureIgnoreCase)));
+
+        lv.BeginUpdate();
+        lv.Items.Clear();
+        lv.Groups.Clear();
+        lv.ShowGroups = mode.Length > 0;
+        if (mode.Length == 0)
+        {
+            lv.Items.AddRange(rows.ToArray());
+        }
+        else
+        {
+            foreach (var g in rows.GroupBy(i => GroupKey((Target)i.Tag!, mode)).OrderBy(g => g.Key.Sort, StringComparer.Ordinal))
+            {
+                var group = new ListViewGroup($"{g.Key.Header}   ({g.Count()})")
+                {
+                    CollapsedState = ListViewGroupCollapsedState.Expanded,
+                };
+                lv.Groups.Add(group);
+                foreach (var item in g)
+                {
+                    item.Group = group;
+                    lv.Items.Add(item);
+                }
+            }
+        }
+        lv.EndUpdate();
+    }
+
+    private static (string Header, string Sort) GroupKey(Target t, string mode)
+    {
+        var svc = Services.NameOf(t.Port);
+        switch (mode)
+        {
+            case "Port":
+                return (svc.Length > 0 ? $"Port {t.Port} — {svc}" : $"Port {t.Port}", t.Port.ToString("D5"));
+            case "Servis":
+                return svc.Length > 0 ? (svc, "0" + svc) : ("Bilinmeyen servis", "1");
+            default:
+                var sort = IPAddress.TryParse(t.Host, out var ip) ? Scanner.IpSortKey(ip).ToString("D10") : t.Host;
+                return (t.HostName is { Length: > 0 } hn ? $"{t.Host} — {hn}" : t.Host, sort);
+        }
+    }
+
+    private ContextMenuStrip MakeItemMenu(ListView lv)
+    {
+        var menu = new ContextMenuStrip();
+        menu.Opening += (_, e) =>
+        {
+            menu.Items.Clear();
+            if (lv.SelectedItems.Count == 0 || lv.SelectedItems[0].Tag is not Target t)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            menu.Items.Add(new ToolStripMenuItem($"{t.Host}:{t.Port}  {Services.NameOf(t.Port)}") { Enabled = false });
+            menu.Items.Add(new ToolStripSeparator());
+            foreach (var a in PortActions.ForPort(t.Host, t.Port))
+                menu.Items.Add(a.Title, null, (_, _) => Launch(a));
+            menu.Items.Add("Portu şimdi kontrol et", null, async (_, _) => await RecheckAsync(t));
+            menu.Items.Add(new ToolStripSeparator());
+            foreach (var a in PortActions.ForHost(t.Host))
+                menu.Items.Add(a.Title, null, (_, _) => Launch(a));
+            menu.Items.Add("Bu adresin tüm portlarını göster", null, (_, _) => _txtFilter.Text = t.Host);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Adresi kopyala", null, (_, _) => Clipboard.SetText(t.Host));
+            menu.Items.Add("Adres:port kopyala", null, (_, _) => Clipboard.SetText($"{t.Host}:{t.Port}"));
+            if (t.HostName is { Length: > 0 } hn)
+                menu.Items.Add("Cihaz adını kopyala", null, (_, _) => Clipboard.SetText(hn));
+            // Menü boşken açılırsa WinForms Opening'i iptal edilmiş olarak gönderir.
+            e.Cancel = false;
         };
-        _lvChanges.Items.Insert(0, item);
-        while (_lvChanges.Items.Count > MaxChangeRows)
-            _lvChanges.Items.RemoveAt(_lvChanges.Items.Count - 1);
-        _tabChanges.Text = $"Değişiklikler ({_lvChanges.Items.Count})";
+        return menu;
+    }
+
+    private void Launch(PortAction a)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(a.FileName, a.Arguments) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"{a.Title} başlatılamadı:\n{ex.Message}", AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task RecheckAsync(Target t)
+    {
+        if (!IPAddress.TryParse(t.Host, out var ip)) return;
+        SetStatus($"{t.Host}:{t.Port} kontrol ediliyor...");
+        bool open = await Scanner.IsOpenAsync(ip, t.Port, Math.Max(_settings.TimeoutMs, 1000), CancellationToken.None);
+        SetStatus($"{t.Host}:{t.Port} şu anda {(open ? "AÇIK" : "kapalı ya da yanıt vermiyor")} ({DateTime.Now:T})");
     }
 
     private void SetScanning(bool scanning)

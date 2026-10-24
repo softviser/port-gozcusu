@@ -29,7 +29,7 @@ internal static class Scanner
         return open.OrderBy(o => IpSortKey(o.Host)).ThenBy(o => o.Port).ToList();
     }
 
-    private static async Task<bool> IsOpenAsync(IPAddress ip, int port, int timeoutMs, CancellationToken ct)
+    public static async Task<bool> IsOpenAsync(IPAddress ip, int port, int timeoutMs, CancellationToken ct)
     {
         using var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         // Bağlantıyı RST ile kapat: binlerce TIME_WAIT soketi biriktirme.
@@ -133,6 +133,9 @@ internal static class TargetParser
             }
             else
             {
+                // "10.0.0" gibi eksik adresler Windows'ta ad çözümlemeyle 10.0.0.0'a dönüşmesin.
+                if (token.All(c => char.IsDigit(c) || c == '.'))
+                    throw new FormatException($"Geçersiz IP adresi: {token}");
                 IPAddress[] addresses;
                 try { addresses = Dns.GetHostAddresses(token); }
                 catch { throw new FormatException($"Ad çözümlenemedi: {token}"); }

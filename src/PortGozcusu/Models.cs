@@ -5,8 +5,12 @@ namespace PortGozcusu;
 public sealed class AppSettings
 {
     /// <summary>Boşsa yerel alt ağ(lar) otomatik algılanır.</summary>
+    public const string DefaultPorts = "21,22,23,25,53,80,110,135,139,143,443,445,465,587,993,995,1433,1521,1883,3306,3389,5000,5432,5900,6379,8000,8080,8443,9000,9100,27017";
+
     public string Targets { get; set; } = "";
-    public string Ports { get; set; } = "21,22,23,25,53,80,110,135,139,143,443,445,465,587,993,995,1433,1521,1883,3306,3389,5000,5432,5900,6379,8000,8080,8443,9000,9100,27017";
+    public string Ports { get; set; } = DefaultPorts;
+    /// <summary>Sonuç listesi gruplaması: "", "Adres", "Port" veya "Servis".</summary>
+    public string GroupBy { get; set; } = "";
     public int IntervalMinutes { get; set; } = 15;
     public int TimeoutMs { get; set; } = 400;
     public int Parallelism { get; set; } = 256;
