@@ -30,8 +30,7 @@ internal static class PortActions
                 list.Add(new("FTP adresini aç", $"ftp://{host}:{port}/"));
                 break;
             case 139 or 445:
-                list.Add(new("Paylaşılan klasörleri aç", "explorer.exe", $@"\\{host}"));
-                break;
+                return list; // Gezgin ve paylaşım işlemleri adres menüsünde (MainForm)
             case 5900 or 5901:
                 list.Add(new("VNC ile bağlan", $"vnc://{host}:{port}"));
                 break;

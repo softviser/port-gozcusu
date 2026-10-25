@@ -501,7 +501,7 @@ internal sealed class MainForm : Form
 
     // Görünüm
 
-    private sealed record Target(string Host, int Port, string? HostName, IReadOnlyList<string>? Shares = null);
+    private sealed record Target(string Host, int Port, string? HostName);
 
     private void RenderAll()
     {
@@ -512,7 +512,7 @@ internal sealed class MainForm : Form
             {
                 e.Host, e.HostName ?? "", e.Port.ToString(), Services.NameOf(e.Port), SharesText(e),
                 e.FirstSeen.ToString("g"), e.LastSeen.ToString("g"),
-            }) { Tag = new Target(e.Host, e.Port, e.HostName, e.Shares) }));
+            }) { Tag = new Target(e.Host, e.Port, e.HostName) }));
 
         Fill(_lvChanges, _changes.Select(c => new ListViewItem(new[]
         {
@@ -569,8 +569,35 @@ internal sealed class MainForm : Form
         lv.EndUpdate();
     }
 
-    private static string SharesText(PortEntry e) =>
-        e.Shares is { Count: > 0 } s ? string.Join(", ", s) : e.ShareError is { } err ? $"({err})" : "";
+    private static string SharesText(PortEntry e)
+    {
+        if (e.Port is not (139 or 445)) return "";
+        if (e.Shares is { Count: > 0 } s) return string.Join(", ", s);
+        if (e.ShareError is { } err) return $"({err})";
+        return e.Shares == null ? "(henüz okunmadı)" : "(paylaşım yok)";
+    }
+
+    private PortEntry? SmbEntry(string host) =>
+        _snapshot.Open.GetValueOrDefault($"{host}:445") ?? _snapshot.Open.GetValueOrDefault($"{host}:139");
+
+    private async Task RefreshSharesAsync(string host)
+    {
+        SetStatus($"{host} paylaşımları okunuyor...");
+        var r = (await Shares.ListAsync(new[] { host }, CancellationToken.None))[host];
+        foreach (var port in new[] { 139, 445 })
+        {
+            if (_snapshot.Open.TryGetValue($"{host}:{port}", out var e))
+            {
+                e.Shares = r.Names;
+                e.ShareError = r.Error;
+            }
+        }
+        Storage.Save(AppPaths.SnapshotFile, _snapshot);
+        RenderAll();
+        SetStatus(r.Error != null
+            ? $"{host}: paylaşımlar okunamadı ({r.Error})"
+            : $"{host}: {r.Names.Count} paylaşım bulundu");
+    }
 
     private static (string Header, string Sort) GroupKey(Target t, string mode)
     {
@@ -603,10 +630,16 @@ internal sealed class MainForm : Form
             menu.Items.Add(new ToolStripSeparator());
             foreach (var a in PortActions.ForPort(t.Host, t.Port))
                 menu.Items.Add(a.Title, null, (_, _) => Launch(a));
-            foreach (var share in t.Shares ?? Array.Empty<string>())
+            if (SmbEntry(t.Host) is { } smb)
             {
-                var path = $@"\\{t.Host}\{share}";
-                menu.Items.Add($"{path} klasörünü aç", null, (_, _) => Launch(new PortAction("Paylaşım", "explorer.exe", path)));
+                var root = $@"\\{t.Host}";
+                menu.Items.Add($"Gezginde göster ({root})", null, (_, _) => Launch(new PortAction("Gezgin", "explorer.exe", root)));
+                foreach (var share in smb.Shares ?? new List<string>())
+                {
+                    var path = $@"{root}\{share}";
+                    menu.Items.Add($"{path} klasörünü aç", null, (_, _) => Launch(new PortAction("Paylaşım", "explorer.exe", path)));
+                }
+                menu.Items.Add("Paylaşımları şimdi oku", null, async (_, _) => await RefreshSharesAsync(t.Host));
             }
             menu.Items.Add("Portu şimdi kontrol et", null, async (_, _) => await RecheckAsync(t));
             menu.Items.Add(new ToolStripSeparator());

@@ -63,6 +63,8 @@ Ping, sürekli ping ve tracert çıktısı uygulama içindeki bir pencerede canl
 
 Tarama sırasında 139 veya 445 portu açık olan cihazlardaki paylaşımlar okunur ve **Paylaşımlar** sütununda gösterilir. `C$`, `ADMIN$`, `IPC$` gibi yönetim paylaşımları listelenmez. Cihaz Windows kullanıcınızın erişimine izin vermiyorsa sütunda "(erişim yok)" yazar.
 
+Paylaşımlar taramanın sonunda okunduğu için geniş port aralıklarında (ör. `1-1024`) sütun bir süre "(henüz okunmadı)" olarak kalabilir. Beklemek istemezseniz satıra sağ tıklayıp **Paylaşımları şimdi oku** seçeneğini kullanın. **Gezginde göster** cihazın tüm paylaşımlarını Windows Gezgini'nde açar.
+
 Pencereyi kapattığınızda uygulama tepsiye iner. Tamamen kapatmak için tepsi simgesine sağ tıklayıp **Çıkış**'ı seçin.
 
 Uygulama `--minimized` parametresiyle başlatılırsa pencere açılmadan doğrudan tepside çalışır (otomatik başlatma bunu kullanır).
@@ -165,6 +167,12 @@ build.ps1           Derleme ve paketleme
 ```
 
 ## Sürüm geçmişi
+
+### 1.2.1
+
+- Sağ tık menüsüne SMB portu açık cihazlar için **Gezginde göster** ve **Paylaşımları şimdi oku** eklendi.
+- Paylaşımlar sütunu henüz okunmamış ya da boş olan cihazlarda "(henüz okunmadı)" / "(paylaşım yok)" yazıyor; önceden boş kalıyordu.
+- Paylaşım işlemleri değişiklikler listesindeki satırlardan da kullanılabiliyor.
 
 ### 1.2.0
 

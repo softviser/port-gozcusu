@@ -32,10 +32,11 @@ public class PortActionsTests
     }
 
     [Fact]
-    public void Smb_opens_shares_without_browser()
+    public void Smb_ports_have_no_browser_action()
     {
-        var a = Assert.Single(PortActions.ForPort(Host, 445));
-        Assert.Equal(@"\\192.168.1.20", a.Arguments);
+        // Gezgin ve paylaşım işlemleri adres menüsünden gelir.
+        Assert.Empty(PortActions.ForPort(Host, 445));
+        Assert.Empty(PortActions.ForPort(Host, 139));
     }
 
     [Fact]
